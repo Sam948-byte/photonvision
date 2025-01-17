@@ -624,6 +624,62 @@ public class RequestHandler {
                                 UIPhotonConfiguration.programStateToUi(ConfigManager.getInstance().getConfig())));
     }
 
+    public static void onModelsExportRequest(Context ctx) {
+        logger.info("Exporting Object Detection Models to ZIP Archive");
+
+        try {
+            var zip = ConfigManager.getInstance().getModelsFolderAsZip();
+            var stream = new FileInputStream(zip);
+            logger.info("Uploading models with size " + stream.available());
+
+            ctx.contentType("application/zip");
+            ctx.header(
+                    "Content-Disposition", "attachment; filename=\"photonvision-models-export.zip\"");
+
+            ctx.result(stream);
+            ctx.status(200);
+        } catch (IOException e) {
+            logger.error("Unable to export models archive, bad recode from zip to byte");
+            ctx.status(500);
+            ctx.result("There was an error while exporting the models archive");
+        }
+    }
+
+    public static void onObjectDetectionModelsImportRequest(Context ctx) {
+        var file = ctx.uploadedFile("data");
+
+        if (file == null) {
+            ctx.status(400);
+            ctx.result(
+                    "No File was sent with the request. Make sure that the settings zip is sent at the key 'data'");
+            logger.error(
+                    "No File was sent with the request. Make sure that the settings zip is sent at the key 'data'");
+            return;
+        }
+
+        if (!file.extension().contains("zip")) {
+            ctx.status(400);
+            ctx.result(
+                    "The uploaded file was not of type 'zip'. The uploaded file should be a .zip file.");
+            logger.error(
+                    "The uploaded file was not of type 'zip'. The uploaded file should be a .zip file.");
+            return;
+        }
+
+        // Create a temp file
+        var tempFilePath = handleTempFileCreation(file);
+
+        if (tempFilePath.isEmpty()) {
+            ctx.status(500);
+            ctx.result("There was an error while creating a temporary copy of the file");
+            logger.error("There was an error while creating a temporary copy of the file");
+            return;
+        }
+
+        // Write all files to the models directory
+        ZipUtil.unpack(tempFilePath.get(), ConfigManager.getInstance().getModelsDirectory());
+    }
+
     public static void onDeviceRestartRequest(Context ctx) {
         ctx.status(HardwareManager.getInstance().restartDevice() ? 204 : 500);
     }
